@@ -3,6 +3,7 @@ import { Button } from "@heroui/button";
 import { applyParamsToScript, Constr, Data, fromText, MintingPolicy, mintingPolicyToId, toUnit, TxSignBuilder } from "@lucid-evolution/lucid";
 
 import { ActionGroup } from "@/types/action";
+import * as Koios from "@/config/koios";
 import { Script } from "@/config/script";
 import { useWallet } from "@/components/connection/context";
 
@@ -192,11 +193,6 @@ export default function Dashboard(props: { setActionResult: (result: string) => 
           const mintingScript = applyParamsToScript(Script.MintNFT, [txHash, txIndex]);
           const mintingValidator: MintingPolicy = { type: "PlutusV3", script: mintingScript };
 
-          localStorage.setItem("nftMintingScript", mintingValidator.script);
-          console.log({
-            nftMintingScript: localStorage.getItem("nftMintingScript"),
-          });
-
           const policyID = mintingPolicyToId(mintingValidator);
 
           const tokenName = "Action NFT";
@@ -225,7 +221,12 @@ export default function Dashboard(props: { setActionResult: (result: string) => 
             .validTo(new Date().getTime() + 15 * 60_000) // ~15 minutes
             .complete();
 
-          submitTx(tx).then(props.setActionResult).catch(props.onError);
+          submitTx(tx)
+            .then((result) => {
+              localStorage.setItem("mint_answer.nft_policyid", policyID);
+              props.setActionResult(result);
+            })
+            .catch(props.onError);
         } catch (error) {
           props.onError(error);
         }
@@ -235,12 +236,11 @@ export default function Dashboard(props: { setActionResult: (result: string) => 
         try {
           if (!lucid.wallet()) lucid.selectWallet.fromAPI(api);
 
-          const nftMintingScript = localStorage.getItem("nftMintingScript");
+          const policyID = localStorage.getItem("mint_answer.nft_policyid");
 
-          if (!nftMintingScript) throw "You must mint an NFT First!";
+          if (!policyID) throw "You must mint an NFT First!";
 
-          const mintingValidator: MintingPolicy = { type: "PlutusV3", script: nftMintingScript };
-          const policyID = mintingPolicyToId(mintingValidator);
+          const mintingValidator: MintingPolicy = { type: "PlutusV3", script: await Koios.getScriptFrom(policyID) };
 
           const tokenName = "Action NFT";
           const assetName = fromText(tokenName);
@@ -263,8 +263,8 @@ export default function Dashboard(props: { setActionResult: (result: string) => 
 
           submitTx(tx)
             .then((result) => {
+              localStorage.removeItem("mint_answer.nft_policyid");
               props.setActionResult(result);
-              localStorage.clear();
             })
             .catch(props.onError);
         } catch (error) {
